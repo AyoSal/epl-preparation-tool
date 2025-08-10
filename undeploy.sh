@@ -13,8 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 ENV="{YOUR APIGEE ENVIRONMENT}"
-ORG="{YOUR APIGEE ORG}"
+ORG="{YOUR APIGEE ORG NAME}"
 token=$(gcloud auth print-access-token)
+UNDEPLOYMENT_MANIFEST="undeployed_proxies.json"
 
 echo "Starting undeployment process for environment: $ENV in organization: $ORG"
 
@@ -35,6 +36,9 @@ if [[ -z "$DEPS" ]]; then
     echo "No deployments found in environment '$ENV'."
     exit 0
 fi
+# Store the list of deployments in a JSON file before undeploying
+echo "$DEPS" | jq -c '.deployments[] | {apiProxy, revision}' | jq -s '.' > "$UNDEPLOYMENT_MANIFEST"
+
 
 echo "$DEPS" | jq -c '.deployments[] | {apiProxy, revision}' | while IFS= read -r deployment_obj_str; do
     # Use jq again to extract values from the line (which is a mini JSON object)
