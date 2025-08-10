@@ -44,3 +44,7 @@ Steps for Re-deploying Proxies
 
 redeploy the undeployed proxies earlier with the deploy script
 
+```bash
+  ./redepoy.sh
+```
+
