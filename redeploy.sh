@@ -12,60 +12,52 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-export ENV="{YOUR APIGEE ENVIRONMENT}" # Replace with your environment name
-export ORG="{YOUR APIGEE ORG NAME}" # Replace with your organization name
-export PROXIES_FILE="undeployed_proxies.json" # The name of the JSON file containing the proxies to deploy
+#!/bin/bash
 
-echo "Starting deployment process for proxies listed in '$PROXIES_FILE' to environment: $ENV in organization: $ORG"
+# Configuration variables
+ENV="{YOUR APIGEE ENVIRONMENT}"
+ORG="{YOUR APIGEE ORG  NAME}"
 
-# Function to install apigeecli
-install_apigeecli() {
-        echo "🔄 Installing apigeecli ..."
-        curl -s https://raw.githubusercontent.com/apigee/apigeecli/main/downloadLatest.sh | bash
-        export PATH=$HOME/.apigeecli/bin:$PATH
-        echo "✅ apigeecli installed."
-}
+# Input file for the proxies to redeploy
+DEPLOYMENT_FILE="undeployed_proxies.json"
 
-# Call the function to ensure apigeecli is installed and in the PATH
-install_apigeecli
+# Get access token
+token=$(gcloud auth print-access-token)
 
-# Check if the proxies file exists and is not empty
-if [ ! -s "$PROXIES_FILE" ]; then
-    echo "❌ Error: The file '$PROXIES_FILE' does not exist or is empty. No proxies to deploy."
+echo "Starting redeployment process for environment: $ENV in organization: $ORG"
+
+# Ensure the apigeecli tool is installed and the token is valid
+if ! command -v apigeecli &> /dev/null; then
+    echo "Error: apigeecli tool not found. Please install it."
     exit 1
 fi
 
-echo "Reading proxies from '$PROXIES_FILE'..."
+if [ -z "$token" ]; then
+    echo "Error: The 'token' variable is not set. Please ensure you have a valid Apigee access token."
+    exit 1
+fi
 
-# Use a more robust jq command to handle potential formatting issues and ensure proper parsing
-jq -r '.deployments[]? | (.apiProxy + " " + .revision)' "$PROXIES_FILE" | while read -r PROXY REV; do
-    
-    # Check if the variables are empty and skip if they are
-    if [ -z "$PROXY" ] || [ -z "$REV" ]; then
-        echo "Skipping an empty or malformed line in the input."
-        continue
-    fi
+# Ensure the deployments file exists
+if [ ! -f "$DEPLOYMENT_FILE" ]; then
+    echo "Error: Deployment file '$DEPLOYMENT_FILE' not found. Please ensure it's a valid JSON array."
+    exit 1
+fi
 
-    # Get a fresh token before each API call to avoid expiration issues
-    token=$(gcloud auth print-access-token)
+# Read deployments from the JSON file and redeploy each one
+jq -c '.[] | {apiProxy, revision}' "$DEPLOYMENT_FILE" | while IFS= read -r deployment_obj_str; do
+    # Extract proxy name and revision from the JSON object
+    PROXY=$(echo "$deployment_obj_str" | jq -r '.apiProxy')
+    REV=$(echo "$deployment_obj_str" | jq -r '.revision')
 
-    echo "Attempting to deploy proxy: $PROXY, revision: $REV to environment: $ENV"
-
-    # Perform the deployment
-    apigeecli apis deploy \
-        -o "$ORG" \
-        --token "$token" \
-        --name="$PROXY" \
-        --rev="$REV" \
-        --env="$ENV" \
-        --override # Use this flag to replace an already deployed revision
-
+    echo "Redeploying proxy: $PROXY, revision: $REV to environment: $ENV"
+    # Note: The 'deploy' command will look for the bundle locally. 
+    # This script assumes the proxy bundle for the specified revision is available.
+    apigeecli apis deploy -o "$ORG" --token "$token" --name="$PROXY" --rev="$REV" --env="$ENV"
     if [ $? -eq 0 ]; then
-        echo "✅ Successfully deployed proxy: $PROXY, revision: $REV to environment: $ENV"
+        echo "Successfully redeployed proxy: $PROXY, revision: $REV"
     else
-        echo "❌ Error deploying proxy: $PROXY, revision: $REV."
-        echo "Please check the logs for more details."
+        echo "Error redeploying proxy: $PROXY, revision: $REV. Check the logs for details."
     fi
 done
 
-echo "Deployment process finished."
+echo "Redeployment process completed."
