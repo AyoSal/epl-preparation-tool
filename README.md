@@ -7,7 +7,7 @@ This repo contains undeploy and deploy scripts as tools to aid Apigee hybrid cus
 
 Steps for Undeploying Proxies
 
-INstall apigeeecli by following instructions at this repo 
+Install apigeeecli by following instructions at this [repo](https://github.com/apigee/apigeecli?tab=readme-ov-file#installation) 
 
 Generate a token with this command
 
